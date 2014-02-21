@@ -1,0 +1,141 @@
+#!/bin/bash
+
+# CVLC location
+CVLC=/usr/bin/cvlc
+
+# Channels list
+INPUT="`dirname $0`/cvlcs.list"
+
+# Video bitrate
+bitrate=1024
+
+# Audio bitrate
+arate=128
+
+# Listening port
+port=3389
+
+# Deinterlace?
+deint=yes
+
+# Transcode
+transcode=no
+
+# Scale
+scale=no
+
+# Full stream (All audioi languages, teletext, ..)
+fstream=no
+
+# Defaul channel if nothing specified
+ch_default=1
+
+#### Program help msg
+usage() {
+    cat 1>&2 <<EOF
+Usage: $0 [-CDtsf] [-c <channel number>] [-p <port>] [-b <rate>] [-a <rate>]
+    -C  List available tv channels
+    -D  Do not perform de-interlacing
+    -t  Transcode stream to h264
+    -s  Scale stream to half size
+    -f  Full stream (All audioi languages, teletext, ..)
+    -c  TV channel number (default=$ch_default)
+    -p  Listening streaming port (default=$port)
+    -b  video bitrate kb/s (default=$bitrate)
+    -a  audio bitrate kb/s (default=$arate)
+EOF
+    exit 1
+}
+
+get_ch_list() {
+    i=0
+    for channel in "${CH_NAME[@]}"; do
+        ((i++))
+        printf "\e[1;31m%2s \e[1;37m%-20s" "$i" "$channel"
+        if [ $(( $i % 3 )) == 0 ]; then
+            printf "\n";
+        else
+            printf "\t";
+        fi
+    done
+    printf "\n";
+    exit 1
+}
+
+if [ $# -eq 0 ];
+then
+      usage;
+fi
+
+declare -a CH_NAME
+declare -a CH_NUM
+declare -a CH_MCAST
+declare -i num
+num=1
+
+# Loading channel lists
+IFS=,
+[ ! -f $INPUT ] && { echo "$INPUT file not found"; exit 99; }
+while read mcast chname; do
+    CH_MCAST+=($mcast)
+    CH_NAME+=($chname)
+    CH_NUM+=($num)
+    (( num++ ))
+done < $INPUT
+IFS=
+
+# Parsing program options
+while getopts 'c:CDtsfp:b:a:h' opt; do
+    case "${opt}" in
+        c) ch_default=$OPTARG ;;
+        C) get_ch_list ;;
+        D) deint=no ;;
+        t) transcode=yes ;;
+        s) scale=yes ;;
+        f) fstream=yes ;;
+        p) port=$OPTARG ;;
+        b) bitrate=$OPTARG ;;
+        a) arate=$OPTARG ;;
+        h) usage ;;
+        *) echo "Unknown option $opt" 1>&2; usage ;;
+    esac
+done
+shift $(( $OPTIND - 1 ))
+
+# Checking if port is free
+n=`lsof -iTCP:$port`
+if [ "$n" != "" ]; then
+    echo "cvlcs port:$port is being used by another application"
+    exit 1
+fi
+
+# We are starting streaming
+echo "Stream URL: http://10.10.10.10:$port"
+echo "Channel: ${CH_NAME[$ch_default-1]}"
+mcast_addr="${CH_MCAST[$ch_default-1]}"
+
+cvlc_opt=""
+if [ "$deint" == "yes" ]; then
+    cvlc_opt="--deinterlace=1 --sout-transcode-deinterlace --sout-deinterlace-mode=blend"
+fi
+
+if [ "$fstream" == "yes" ]; then
+    cvlc_opt+=" --sout-all"
+fi
+
+scale_opt=""
+if [ "$scale" == "yes" ]; then
+    scale_opt="scale=0.5"
+else
+    scale_opt="scale=1.0"
+fi
+
+sout_opt=""
+if [ "$transcode" == "yes" ]; then
+    sout_opt="#transcode{$scale_opt,fps=25,vcodec=h264,vb=$bitrate,venc=x264{profile=high,level=5,keyint=33,weightp=0},acodec=mp3,ab=$arate}:duplicate{dst=http{mux=ts,dst=:$port/}}"
+else
+    sout_opt="#duplicate{dst=http{mux=ts,dst=:$port/}}"
+fi
+
+$CVLC udp://@$mcast_addr $cvlc_opt --sout=$sout_opt
+
