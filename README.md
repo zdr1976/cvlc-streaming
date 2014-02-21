@@ -6,8 +6,7 @@ stream and transcode it. The output is HTTP stream.
 
 * $ mkdir /path/to/src
 * $ cd /path/to/src
-* $git remote add origin https://github.com/zdr1976/cvlc-streaming.git
-* $git push -u origin master
+* $ git clone https://github.com/zdr1976/cvlc-streaming.git
 
 ## Usage
 You can use cvlcs as show below
