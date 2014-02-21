@@ -1,4 +1,12 @@
 #!/bin/bash
+#title          :cvlcs
+#description    :cvlc streaming wrapper.
+#author         :ZDR
+#date           :20140221
+#version        :0.1
+#usage          :cvlc -h
+#notes          :None
+#bash_version   :4.2.45(1)
 
 # CVLC location
 CVLC=/usr/bin/cvlc
